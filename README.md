@@ -1,5 +1,5 @@
-# millionpointsoflight
-A few orders of magnitude more than a thousand
+# A Million Points of Light
+A few orders of magnitude more than a thousand. 
 
 ![Logo](logo.png)
 
