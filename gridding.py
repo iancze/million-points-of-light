@@ -1,3 +1,5 @@
+import numpy as np
+
 # implementation of the gridding convolution functions and image pre-multiply
 
 # fill the sparse interpolation matrix.
@@ -15,6 +17,7 @@ def horner(x, a):
         result = a[i] + (x * result)
     return result
 
+@np.vectorize
 def spheroid(eta):
     '''
         `spheroid` function which assumes ``\\alpha`` = 1.0, ``m=6``,  built for speed."
@@ -29,14 +32,12 @@ def spheroid(eta):
     if (eta <= 0.75):
         nn = eta**2 - 0.75**2
 
-        return horner(nn, np.array([8.203343E-2, -3.644705E-1, 6.278660E-1, -5.335581E-1, 2.312756E-1]))/
-            horner(nn, np.array([1., 8.212018E-1, 2.078043E-1]))
+        return horner(nn, np.array([8.203343E-2, -3.644705E-1, 6.278660E-1, -5.335581E-1, 2.312756E-1])) / horner(nn, np.array([1., 8.212018E-1, 2.078043E-1]))
 
     elif (eta <= 1.0):
         nn = eta**2 - 1.0
 
-        return horner(nn, np.array([4.028559E-3, -3.697768E-2, 1.021332E-1, -1.201436E-1, 6.412774E-2]))/
-            horner(nn, np.array([1., 9.599102E-1, 2.918724E-1]))
+        return horner(nn, np.array([4.028559E-3, -3.697768E-2, 1.021332E-1, -1.201436E-1, 6.412774E-2])) / horner(nn, np.array([1., 9.599102E-1, 2.918724E-1]))
 
     elif (eta <= 1.0 + 1e-7):
         # case to allow some floating point error
@@ -149,28 +150,19 @@ def calc_matrices(data_points, u_model, v_model):
 
     '''
 
-    # assert that the maximum baseline is contained within the model grid.
-    # assert that the image-plane pixels are small enough.
+    #TODO: assert that the maximum baseline is contained within the model grid.
+    #TODO: assert that the image-plane pixels are small enough.
 
     # number of visibility points in the dataset
     N_vis = len(data_points)
 
-    # calculate the stride needed to advance one v point when the array is flattened
-    # (the length of the u row).
+    # calculate the stride needed to advance one v point in the flattened array = the length of the u row
     vstride = len(u_model)
     Npix = len(v_model)
-
-    assert Npix % 2 == 0, "Npix (delta-direction) is not even."
-
 
     # initialize two sparse matrices. For now, just call them zeros.
     C_real = np.zeros((N_vis, (Npix * vstride)), dtype=np.float64)
     C_imag = np.zeros((N_vis, (Npix * vstride)), dtype=np.float64)
-
-    # since we will probably have the case that len(data_points) > (len(u_model) * len(v_model)),
-    # it is more efficient to use a compressed sparse column (row) matrix
-    # according to Theano,
-    # If shape[0] > shape[1], use csc format. Otherwise, use csr.
 
     # determine model grid spacing
     du = np.abs(u_model[1] - u_model[0])
@@ -185,25 +177,23 @@ def calc_matrices(data_points, u_model, v_model):
             # normal interpolation can proceed
 
             # find the nearest points in the array
-            i0 = np.searchsorted(u_model)
+            i0 = np.searchsorted(u_model, np.abs(u))
 
             if (v > 0):
-                j0 = np.searchsorted(v_model[Npix/2], u) # only search the positive frequencies
-            else:
-                #(v < 0)
-                j0 = np.searchsorted(v_model[Npix/2:], v) + Npix/2 # only search the negative frequencies
+                j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
+            else: #(v < 0)
+                j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
 
-            is = np.arange(i0 - 3, i0 + 3)# 6 points [i0-3,i0-2,i0-1,i0,i0+1,i0+2]
-            js = np.arange(j0 - 3, j0 + 3)# 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+            i_indices = np.arange(i0 - 3, i0 + 3) # 6 points [i0-3,i0-2,i0-1,i0,i0+1,i0+2]
+            j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
 
-            ls = np.array([i + j * vstride for i in is for j in js]) # list of 36 l indices
-
-            # assemble the real interpolation row
+            l_indices = np.array([i + j * vstride for i in i_indices for j in j_indices]) # list of 36 l indices
 
             # calculate the u and v distances from the (u, v) datapoint to each of the l indices as a function of
             # eta in the domain 0 - 1
-            u_etas = (u - u_model[is]) / du
-            v_etas = (v - v_model[js]) / dv
+            # the 3 is because we have 3 points on either side
+            u_etas = (np.abs(u) - u_model[i_indices]) / (3 * du)
+            v_etas = (v - v_model[j_indices]) / (3 * dv)
 
             # evaluate the spheroid here
             uw = gcffun(u_etas)
@@ -214,25 +204,71 @@ def calc_matrices(data_points, u_model, v_model):
 
             # actual weight at a point is uw[i] * vw[j] / w
             # arrange the uw and vw weights in the same order as ls
-            weight_row = np.array([uw[i] * vw[j]]) / w
+            weight_row = np.array([uw[i] * vw[j] for i in range(6) for j in range(6)]) / w
 
             # insert this into the C matrix at the corresponding locations (the ls)
-            C_real[row_index,ls] = weight_row
+            C_real[row_index,l_indices] = weight_row
 
             # assemble the complex interpolation matrix
             if (u > 0):
                 # do the normal thing for imag
-                C_imag[row_index,ls] = weight_row
+                C_imag[row_index,l_indices] = weight_row
             else:
                 # u < 0
                 # put in the complex conjugate, which is -
-                C_imag[row_index,ls] = -weight_row
+                C_imag[row_index,l_indices] = -weight_row
 
         else:
+            print(row_index, u, v, "overlap")
+
+            # if v overlaps, need to split the indices between negative and positive frequencies
+            if np.abs(v) < 3 * dv: # v overlaps
+                if (v > 0):
+                    j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
+                    j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+
+                    # those that are less than 0 get Npix added to them
+                    j_indices[j_indices < 0] += Npix
+
+                else: #(v < 0)
+                    j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
+
+                    j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+
+                    # those that are greater than Npix get Npix subtracted from to them
+                    j_indices[j_indices >= Npix] -= Npix
+
+            else:
+                # if v overlap is not a concern, just use the normal j_indices
+                if (v > 0):
+                    j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
+                else: #(v < 0)
+                    j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
+
+                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+
+
+            # u overlap
+            if np.abs(u) < 3 * du:
+                pass
+            # if u overlaps, then we need to get the negative coefficients for these
+            # well, this may be a problem, because don't we need to query twice, or something?
+            # I think this means we need to collapse it onto the same point so it counts double...
+
+            else:
+                # process u points as normal
+
+
             # consider all of the tricky edge cases
             # just a flag for now to emphasize that we haven't handled these cases
             C_real[row_index,:] = np.nan
             C_imag[row_index,:] = np.nan
 
 
-        return C_real, C_imag
+    return C_real, C_imag
+
+
+# since we will probably have the case that len(data_points) > (len(u_model) * len(v_model)),
+# it is more efficient to use a compressed sparse column (row) matrix
+# according to Theano,
+# If shape[0] > shape[1], use csc format. Otherwise, use csr.
