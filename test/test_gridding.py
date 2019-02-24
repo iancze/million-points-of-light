@@ -129,6 +129,8 @@ data_points = np.random.uniform(low=0.9 * np.min(vs), high=0.9 * np.max(vs), siz
 
 u_data, v_data = data_points.T
 
+data_values = fourier_plane(u_data, v_data)
+
 print(data_points)
 print(us)
 print(vs)
@@ -145,15 +147,30 @@ C_real, C_imag = gridding.calc_matrices(data_points, us, vs)
 
 print(C_real.shape)
 
-fig, ax = plt.subplots(ncols=1, figsize=(12,3))
+fig, ax = plt.subplots(nrows=2, figsize=(12,6))
 # ax[0].imshow(C_real[], interpolation="none", origin="upper")
 # ax[1].imshow(C_imag[], interpolation="none", origin="upper")
-ax.imshow(C_real[:,0:500], interpolation="none", origin="upper")
+ax[0].imshow(C_real[:,0:500], interpolation="none", origin="upper")
+ax[1].spy(C_real[:,0:500])
 fig.savefig("C_real.png", dpi=300)
 
 fig, ax = plt.subplots(ncols=1, figsize=(12,3))
 ax.imshow(C_imag[:,0:500], interpolation="none", origin="upper")
 fig.savefig("C_imag.png", dpi=300)
+
+# interpolated points
+interp_real = np.dot(C_real, vis.flatten())
+interp_imag = np.dot(C_imag, vis.flatten())
+
+fig, ax = plt.subplots(nrows=4)
+ax[0].plot(np.real(data_values), ".", ms=4)
+ax[0].plot(interp_real, ".", ms=3)
+ax[1].plot(interp_real - np.real(data_values), ".")
+ax[2].plot(np.imag(data_values), ".", ms=4)
+ax[2].plot(interp_imag, ".", ms=3)
+ax[3].plot(interp_imag - np.imag(data_values), ".")
+fig.savefig("real_comp.png", dpi=300)
+
 
 # FIX the edge-cases
 

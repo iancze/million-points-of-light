@@ -171,22 +171,35 @@ def calc_matrices(data_points, u_model, v_model):
     # for each data_point within the grid, calculate the row and insert it into the matrix
     for row_index, (u, v) in enumerate(data_points):
 
-        # assemble a list of l indices into the flattened RFFT output
-        # see if we have an edge case where we  overlap with u=0 or v=0 or not.
-        if (np.abs(u) > 3 * du) and (np.abs(v) > 3 * dv):
-            # normal interpolation can proceed
+        # if v overlaps, need to split the indices between negative and positive frequencies
+        if np.abs(v) < (3 * dv): # v overlaps 0 border
+            if (v > 0):
+                j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
+                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+                j_indices[j_indices < 0] += Npix # those less than 0 get Npix added to them
 
-            # find the nearest points in the array
-            i0 = np.searchsorted(u_model, np.abs(u))
+            else: #(v < 0)
+                j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
+                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+                j_indices[j_indices >= Npix] -= Npix # those greater than Npix get Npix subtracted from to them
 
+        else: # no v overlap w/ 0 border
             if (v > 0):
                 j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
             else: #(v < 0)
                 j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
 
-            i_indices = np.arange(i0 - 3, i0 + 3) # 6 points [i0-3,i0-2,i0-1,i0,i0+1,i0+2]
             j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
 
+        # see if we have an edge case where we overlap with u=0 (the trickiest).
+        # if not, proceed as normal with 36 interpolation points
+        if (np.abs(u) > 3 * du):
+
+            # find the nearest points in the array
+            i0 = np.searchsorted(u_model, np.abs(u))
+            i_indices = np.arange(i0 - 3, i0 + 3) # 6 points [i0-3,i0-2,i0-1,i0,i0+1,i0+2]
+
+            # assemble a list of l indices into the flattened RFFT output
             l_indices = np.array([i + j * vstride for i in i_indices for j in j_indices]) # list of 36 l indices
 
             # calculate the u and v distances from the (u, v) datapoint to each of the l indices as a function of
@@ -204,60 +217,36 @@ def calc_matrices(data_points, u_model, v_model):
 
             # actual weight at a point is uw[i] * vw[j] / w
             # arrange the uw and vw weights in the same order as ls
-            weight_row = np.array([uw[i] * vw[j] for i in range(6) for j in range(6)]) / w
+            weights = np.array([uw[i] * vw[j] for i in range(6) for j in range(6)]) / w
 
             # insert this into the C matrix at the corresponding locations (the ls)
-            C_real[row_index,l_indices] = weight_row
+            C_real[row_index,l_indices] = weights
 
-            # assemble the complex interpolation matrix
-            if (u > 0):
-                # do the normal thing for imag
-                C_imag[row_index,l_indices] = weight_row
-            else:
-                # u < 0
-                # put in the complex conjugate, which is -
-                C_imag[row_index,l_indices] = -weight_row
+            # TODO: correct the uw weights if they index negative
+            if u > 0:
+                C_imag[row_index,l_indices] = weights
+            else: # u < 0
+                # need to enforce complex conjugate on imaginaries
+                # so we're doing a hack, and modifying the uw to be negative (as if it were accessing)
+                # a (-u) value. Becaues uv is always positive, this is equivalent to just negating the weights.
+                C_imag[row_index,l_indices] = -weights
 
         else:
-            print(row_index, u, v, "overlap")
-
-            # if v overlaps, need to split the indices between negative and positive frequencies
-            if np.abs(v) < 3 * dv: # v overlaps
-                if (v > 0):
-                    j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
-                    j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-
-                    # those that are less than 0 get Npix added to them
-                    j_indices[j_indices < 0] += Npix
-
-                else: #(v < 0)
-                    j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
-
-                    j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-
-                    # those that are greater than Npix get Npix subtracted from to them
-                    j_indices[j_indices >= Npix] -= Npix
-
-            else:
-                # if v overlap is not a concern, just use the normal j_indices
-                if (v > 0):
-                    j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
-                else: #(v < 0)
-                    j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
-
-                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-
-
             # u overlap
-            if np.abs(u) < 3 * du:
-                pass
+            # if u overlaps with zero, we'll have fewer than 36 non-zero points in the row
+            # this is because we'll start out with 36 points, but because of the reflective mirroring,
+            # we'll actually be querying the same point twice with different weights
+            # so, these weights should add.
+
+            # this also gets confusing with the complex conjugate for the imaginary values
+
+            # the remaining number of points
+            print(row_index, u, v, "u overlap")
+
             # if u overlaps, then we need to get the negative coefficients for these
             # well, this may be a problem, because don't we need to query twice, or something?
             # I think this means we need to collapse it onto the same point so it counts double...
-
-            else:
-                # process u points as normal
-
+            # basically, adding the weights together
 
             # consider all of the tricky edge cases
             # just a flag for now to emphasize that we haven't handled these cases
