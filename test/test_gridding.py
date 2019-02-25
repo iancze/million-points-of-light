@@ -6,9 +6,10 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.append("/Users/ianczekala/Documents/ALMA/million-points-of-light")
 
+import gridding
+
 # convert from arcseconds to radians
 arcsec = np.pi / (180.0 * 3600) # [radians]  = 1/206265 radian/arcsec
-
 
 def sky_plane(alpha, dec, a=1, delta_alpha=0.0, delta_delta=0.0, sigma_alpha=1.0*arcsec,
               sigma_delta=1.0*arcsec, Omega=0.0):
@@ -30,8 +31,11 @@ def sky_plane(alpha, dec, a=1, delta_alpha=0.0, delta_delta=0.0, sigma_alpha=1.0
 def fourier_plane(u, v, a=1, delta_alpha=0.0, delta_delta=0.0, sigma_alpha=1.0*arcsec,
               sigma_delta=1.0*arcsec, Omega=0.0):
     '''
-    Calculate the Fourier transform of the Gaussian.
+    Calculate the Fourier transform of the Gaussian. Assumes u, v in kλ.
     '''
+
+    u = u * 1e3
+    v = v * 1e3
 
     return 2 * np.pi * a * sigma_alpha * sigma_delta * np.exp(- 2 * np.pi**2 * (sigma_alpha**2 * u**2 + sigma_delta**2 * v**2) - 2 * np.pi * j * (delta_alpha * u + delta_delta * v))
 
@@ -77,20 +81,28 @@ ax.set_title("Input image")
 fig.savefig("input.png", dpi=300)
 
 # pre-multiply the image by the correction function
+corrfun_mat = gridding.corrfun_mat(np.fft.fftshift(ra), np.fft.fftshift(dec))
+
+fig,ax = plt.subplots(nrows=1)
+im = ax.imshow(corrfun_mat, origin="upper", interpolation="none", aspect="equal")
+plt.colorbar(im)
+ax.set_xlabel(r"$\Delta \alpha \cos \delta$")
+ax.set_ylabel(r"$\Delta \delta$")
+ax.set_title("Correction function")
+fig.savefig("corrfun.png", dpi=300)
+
 
 # calculate the Fourier coordinates
 dalpha = (2 * img_radius)/N_alpha
 ddelta = (2 * img_radius)/N_dec
 
-us = np.fft.rfftfreq(N_alpha, d=dalpha)
-vs = np.fft.fftfreq(N_dec, d=ddelta)
+us = np.fft.rfftfreq(N_alpha, d=dalpha) * 1e-3 # convert to [kλ]
+vs = np.fft.fftfreq(N_dec, d=ddelta) * 1e-3 # convert to [kλ]
 
 
 # calculate the FFT, but first shift all axes.
 # normalize output properly
-vis = dalpha * ddelta * np.fft.rfftn(np.fft.fftshift(img), axes=(0,1))
-
-
+vis = dalpha * ddelta * np.fft.rfftn(corrfun_mat * np.fft.fftshift(img), axes=(0,1))
 
 # calculate the corresponding u and v axes
 XX, YY = np.meshgrid(us, vs)
@@ -107,7 +119,8 @@ ax[1,0].imshow(np.imag(np.fft.fftshift(vis, axes=0)), origin="upper", interpolat
 
 ax[0,1].set_title("analytical")
 vis_analytical = fourier_plane(XX, YY)
-ax[0,1].imshow(np.real(np.fft.fftshift(vis_analytical, axes=0)), origin="upper", interpolation="none", aspect="equal", extent=ext)
+im_ral = ax[0,1].imshow(np.real(np.fft.fftshift(vis_analytical, axes=0)), origin="upper", interpolation="none", aspect="equal", extent=ext)
+plt.colorbar(im_ral, ax = ax[0,1])
 ax[1,1].imshow(np.imag(np.fft.fftshift(vis_analytical, axes=0)), origin="upper", interpolation="none", aspect="equal", extent=ext)
 
 # compare to the analytic version
@@ -127,21 +140,27 @@ data_points = np.random.uniform(low=0.9 * np.min(vs), high=0.9 * np.max(vs), siz
 
 # it may help to first sort the u,v datapoints according to v, so that we see more of them.
 
+
+# print(data_points)
+# print(us)
+# print(vs)
+
+
+# fig, ax = plt.subplots(nrows=1)
+# ax.scatter(u_data, v_data)
+# fig.savefig("baselines.png", dpi=300)
+
+# First let's test the intpolation on some known u, v points that will have large values
+# from the figures, these could be
+
+data_points = np.array([[50.0, 10.0], [50.0, 0.0]])
 u_data, v_data = data_points.T
 
 data_values = fourier_plane(u_data, v_data)
 
-print(data_points)
-print(us)
-print(vs)
 
-
-fig, ax = plt.subplots(nrows=1)
-ax.scatter(u_data, v_data)
-fig.savefig("baselines.png", dpi=300)
 
 # calculate and visualize the C_real and C_imag matrices
-import gridding
 
 C_real, C_imag = gridding.calc_matrices(data_points, us, vs)
 
@@ -159,17 +178,23 @@ ax.imshow(C_imag[:,0:500], interpolation="none", origin="upper")
 fig.savefig("C_imag.png", dpi=300)
 
 # interpolated points
-interp_real = np.dot(C_real, vis.flatten())
-interp_imag = np.dot(C_imag, vis.flatten())
+interp_real = np.dot(C_real, np.real(vis.flatten()))
+interp_imag = np.dot(C_imag, np.imag(vis.flatten()))
 
-fig, ax = plt.subplots(nrows=4)
+fig, ax = plt.subplots(nrows=4, figsize=(4,5))
 ax[0].plot(np.real(data_values), ".", ms=4)
 ax[0].plot(interp_real, ".", ms=3)
+ax[0].set_ylabel("real")
 ax[1].plot(interp_real - np.real(data_values), ".")
+ax[1].set_ylabel("real diff")
 ax[2].plot(np.imag(data_values), ".", ms=4)
 ax[2].plot(interp_imag, ".", ms=3)
+ax[2].set_ylabel("imag")
 ax[3].plot(interp_imag - np.imag(data_values), ".")
+ax[3].set_ylabel("imag diff")
+fig.subplots_adjust(hspace=0.4, left=0.2)
 fig.savefig("real_comp.png", dpi=300)
+
 
 
 # FIX the edge-cases

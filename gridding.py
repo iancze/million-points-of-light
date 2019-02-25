@@ -59,35 +59,41 @@ def corrfun(eta):
     return spheroid(eta)
 
 
-# def corrfun(img):
-#     '''
-#     Calculate the pre-multiply correction function to the image.
-#     '''
-#     ny, nx, nlam = size(img.data)
-#
-#     # The size of one half-of the image.
-#     # sometimes ra and dec will be symmetric about 0, othertimes they won't
-#     # so this is a more robust way to determine image half-size
-#     maxra = abs(img.ra[2] - img.ra[1]) * nx/2
-#     maxdec = abs(img.dec[2] - img.dec[1]) * ny/2
-#
-#     for k=1:nlam
-#         for i=1:nx
-#             for j=1:ny
-#                 etax = (img.ra[i])/maxra
-#                 etay = (img.dec[j])/maxdec
-#                 if abs(etax) > 1.0 || abs(etay) > 1.0
-#                     # We would be querying outside the shifted image
-#                     # bounds, so set this emission to 0.0
-#                     img.data[j, i, k] = 0.0
-#                 else
-#                     img.data[j, i, k] = img.data[j, i, k] / (corrfun(etax) * corrfun(etay))
-#                 end
-#             end
-#         end
-#     end
-# end
+def corrfun_mat(alphas, deltas):
+    '''
+    Calculate the pre-multiply correction function to the image.
+    Return as a 2D array.
 
+    Args:
+        alphas (1D array): RA list (pre-fftshifted)
+        deltas (2D array): DEC list (pre-fftshifted)
+
+    '''
+
+    ny = len(deltas)
+    nx = len(alphas)
+
+    mat = np.empty((ny, nx), dtype=np.float64)
+
+    # The size of one half-of the image.
+    # sometimes ra and dec will be symmetric about 0, othertimes they won't
+    # so this is a more robust way to determine image half-size
+    maxra = np.abs(alphas[2] - alphas[1]) * nx/2
+    maxdec = np.abs(deltas[2] - deltas[1]) * ny/2
+
+    for i in range(nx):
+        for j in range(ny):
+            etax = (alphas[i])/maxra
+            etay = (deltas[j])/maxdec
+
+            if (np.abs(etax) > 1.0) or (np.abs(etay) > 1.0):
+                # We would be querying outside the shifted image
+                # bounds, so set this emission to 0.0
+                mat[j, i] = 0.0
+            else:
+                mat[j, i] = 1 / (corrfun(etax) * corrfun(etay))
+
+    return mat
 
 def gcffun(eta):
     '''
@@ -146,7 +152,7 @@ def calc_matrices(data_points, u_model, v_model):
 
     see also `Model.for` routine in MIRIAD source code.
     Uses spheroidal wave functions to interpolate a model to a (u,v) coordinate.
-    u,v are in [kλ]
+    Ensure that datapoints and u_model,v_model are in consistent units (either λ or kλ).
 
     '''
 
