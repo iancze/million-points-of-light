@@ -137,15 +137,6 @@ np.random.seed(42)
 N_vis = 50
 data_points = np.random.uniform(low=0.9 * np.min(vs), high=0.9 * np.max(vs), size=(N_vis, 2))
 
-
-# it may help to first sort the u,v datapoints according to v, so that we see more of them.
-
-
-# print(data_points)
-# print(us)
-# print(vs)
-
-
 # fig, ax = plt.subplots(nrows=1)
 # ax.scatter(u_data, v_data)
 # fig.savefig("baselines.png", dpi=300)
@@ -153,22 +144,17 @@ data_points = np.random.uniform(low=0.9 * np.min(vs), high=0.9 * np.max(vs), siz
 # First let's test the intpolation on some known u, v points that will have large values
 # from the figures, these could be
 
-data_points = np.array([[50.0, 10.0], [50.0, 0.0]])
+data_points = np.array([[50.0, 10.0], [50.0, 0.0], [50.0, -1.0], [-50.0, 10.0], [5.0, 1.0]])
 u_data, v_data = data_points.T
 
 data_values = fourier_plane(u_data, v_data)
 
-
-
 # calculate and visualize the C_real and C_imag matrices
-
 C_real, C_imag = gridding.calc_matrices(data_points, us, vs)
 
 print(C_real.shape)
 
 fig, ax = plt.subplots(nrows=2, figsize=(12,6))
-# ax[0].imshow(C_real[], interpolation="none", origin="upper")
-# ax[1].imshow(C_imag[], interpolation="none", origin="upper")
 ax[0].imshow(C_real[:,0:500], interpolation="none", origin="upper")
 ax[1].spy(C_real[:,0:500])
 fig.savefig("C_real.png", dpi=300)

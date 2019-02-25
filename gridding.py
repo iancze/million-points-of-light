@@ -107,37 +107,6 @@ def gcffun(eta):
     return np.abs(1.0 - eta**2) * spheroid(eta)
 
 
-# assume that the rfft receives an image packed like
-# [a0, d0], [a1,d0],
-# [a0, d1], [a1,d1]
-# i.e., like traditional images, the row index corresponds to y
-# and the column index corresponds to x.
-
-# then the alphas (or u's) are the ones that have been rfft, and the vs are the ones that have been fft'ed
-# so the output array will be
-# [u0, v0] [u1, v0]
-# [u0, v1] [u1, v1]
-# [u0, v2] [u1, v2]
-# [u0, v3] [u1, v3]
-
- # (m, ..., n//2+1, 2)
- # u freqs stored like this
- # f = [0, 1, ...,     n/2-1,     n/2] / (d*n)   if n is even
-
- # v freqs stored like this
- # f = [0, 1, ...,   n/2-1,     -n/2, ..., -1] / (d*n)   if n is even
-
-# so if we flatten this, we'll have
-# # [u0, v0] [u1, v0] [u0, v1] [u1, v1] [u0, v2] [u1, v2] [u0, v3] [u1, v3]
-# i.e., u0 is going through the full range (pos only) and then v is coming together.
-# so we need to get the 6 (3) nearest points in u, taking into account the +/-
-# and then find the nearest v points
-# since we can't do an FFTshift, we need an alternate stride to get the -v points
-
-
-
-# know that the v stride is the number of u points.
-
 def calc_matrices(data_points, u_model, v_model):
     '''
     Calcuate the real and imaginary interpolation matrices in one pass.
@@ -153,6 +122,13 @@ def calc_matrices(data_points, u_model, v_model):
     see also `Model.for` routine in MIRIAD source code.
     Uses spheroidal wave functions to interpolate a model to a (u,v) coordinate.
     Ensure that datapoints and u_model,v_model are in consistent units (either λ or kλ).
+
+    (m, ..., n//2+1, 2)
+    u freqs stored like this
+    f = [0, 1, ...,     n/2-1,     n/2] / (d*n)   if n is even
+
+    v freqs stored like this
+    f = [0, 1, ...,   n/2-1,     -n/2, ..., -1] / (d*n)   if n is even
 
     '''
 
