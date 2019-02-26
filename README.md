@@ -9,10 +9,7 @@ Copyright Ian Czekala, Dan Foreman-Mackey, and collaborators 2018-
 
 email: iancze@gmail.com
 
-
 # Motivation
-
-This is an attempt to bridge the gulf between the amazing quality ALMA data coming out (e.g., DSHARP) with some of the great (magneto-)hydrodynamical simulations of protoplanetary disks with something other than the crude parametric models we observers typically cook up (e.g., see Czekala et al. recent years for some pretty basic examples).
 
 *Briefly, the main functionality of this package that you may be most interested in is the ability to calculate the visibility likelihood and its gradients for an arbitrarily complex sky-plane intensity model.*
 
