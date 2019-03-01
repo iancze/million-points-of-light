@@ -215,23 +215,23 @@ def calc_matrices(data_points, u_model, v_model):
 
         else:
             # u overlap
-            # if u overlaps with zero, we'll have fewer than 36 non-zero points in the row
-            # this is because we'll start out with 36 points, but because of the reflective mirroring,
-            # we'll actually be querying the same point twice with different weights
+            # we'll start out with 36 grid interpolation points, but because of the reflective mirroring,
+            # we'll actually be querying the same point twice with different weights,
             # so, these weights should add.
 
-            # this also gets confusing with the complex conjugate for the imaginary values
+            print("u overlap", row_index, u, v)
 
-            # the remaining number of points
-            print(row_index, u, v, "u overlap")
+            # 1) calculate the 6 distances (eta_us) between the current u point and the adjacent values
 
-            # if u overlaps, then we need to get the negative coefficients for these
-            # well, this may be a problem, because don't we need to query twice, or something?
-            # I think this means we need to collapse it onto the same point so it counts double...
-            # basically, adding the weights together
+            # 2) calculate the 6 weights
 
-            # consider all of the tricky edge cases
-            # just a flag for now to emphasize that we haven't handled these cases
+            # 3) use these, with the v-values, to calculate the normalization w
+
+            # 4) for the imaginary values, identify which values need to be negated (complex conj)
+
+            # 5) collapse the -u values to count double on the +u values.
+
+
             C_real[row_index,:] = np.nan
             C_imag[row_index,:] = np.nan
 
