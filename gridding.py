@@ -173,6 +173,11 @@ def calc_matrices(data_points, u_model, v_model):
 
             j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
 
+
+        # Calculate the v weights here, because they will be unchanged by any logic that follows
+        v_etas = (v - v_model[j_indices]) / (3 * dv)
+        vw = gcffun(v_etas)
+
         # see if we have an edge case where we overlap with u=0 (the trickiest).
         # if not, proceed as normal with 36 interpolation points
         if (np.abs(u) > 3 * du):
@@ -188,11 +193,9 @@ def calc_matrices(data_points, u_model, v_model):
             # eta in the domain 0 - 1
             # the 3 is because we have 3 points on either side
             u_etas = (np.abs(u) - u_model[i_indices]) / (3 * du)
-            v_etas = (v - v_model[j_indices]) / (3 * dv)
 
             # evaluate the spheroid here
             uw = gcffun(u_etas)
-            vw = gcffun(v_etas)
 
             # Normalization such that it has an area of 1. Divide by w later.
             w = sum(uw) * sum(vw)
@@ -219,22 +222,76 @@ def calc_matrices(data_points, u_model, v_model):
             # we'll actually be querying the same point twice with different weights,
             # so, these weights should add.
 
-            print("u overlap", row_index, u, v)
+            print()
+            print("u overlap", row_index, u, "du", du, "v", v)
 
             # 1) calculate the 6 distances (eta_us) between the current u point and the adjacent values
+            i0 = np.searchsorted(u_model, np.abs(u))
 
-            # 2) calculate the 6 weights
+            # Can delete later
+            distance_right = i0 - np.abs(u)/du # towards increasing u values
+            print("distance_right", distance_right)
+
+            # 4) Figure out how many unique i-values we will have after overlap
+            # i_indices was originally calculated assuming that all u values were either negative or positive.
+            # but since they straddle, we need to separate them here to rearrange the order of the u_etas
+            if u > 0:
+                i_indices = np.arange(i0 - 3, i0 + 3) # 6 points
+                u_etas = (i_indices - u/du) / 3
+            else:
+                i_indices = np.arange(-i0 - 2, -i0 + 4) # 6 points
+                u_etas = (i_indices - u/du) / 3
+
+            print("u_etas", u_etas)
+
+            # 2) calculate the 6 u-weights
+            uw = gcffun(u_etas)
+            print("uw", uw)
 
             # 3) use these, with the v-values, to calculate the normalization w
-
-            # 4) for the imaginary values, identify which values need to be negated (complex conj)
-
-            # 5) collapse the -u values to count double on the +u values.
+            w = sum(uw) * sum(vw)
 
 
-            C_real[row_index,:] = np.nan
-            C_imag[row_index,:] = np.nan
+            print("i_indices", i_indices)
+            n_unique = np.max(np.abs(i_indices)) + 1 # 1 is to count 0 index as well
+            print("n_unique", n_unique)
 
+            ind_pos = (i_indices >= 0)
+            n_pos = np.sum(ind_pos)
+            print("ind_pos", ind_pos)
+            print("n_pos", n_pos)
+
+            # 5) Create a shortened storage array
+            uw_collapsed_real = np.zeros(n_unique)
+            uw_collapsed_imag = np.zeros(n_unique)
+
+            # insert the positive values
+            uw_collapsed_real[:n_pos] = uw[ind_pos]
+            uw_collapsed_imag[:n_pos] = uw[ind_pos]
+
+            print("uw_collapsed_real", uw_collapsed_real)
+            print("uw_collapsed_imag", uw_collapsed_imag)
+
+            # 6) find the indices of the negative values
+            ind_neg = ~ind_pos
+            position_neg = np.abs(i_indices[ind_neg])
+            print(position_neg, "position_neg")
+
+            # add them to the existing weights
+            uw_collapsed_real[position_neg] += uw[ind_neg]
+            uw_collapsed_imag[position_neg] += -uw[ind_neg] # complex conjugate for imaginary values
+            print("uw_collapsed_real", uw_collapsed_real)
+            print("uw_collapsed_imag", uw_collapsed_imag)
+
+            # 7) assemble a list of l indices into the flattened RFFT output
+            # note that we're looping over range(n_unique) rather than i_indices
+            l_indices = np.array([i + j * vstride for i in range(n_unique) for j in j_indices]) # list of 36 l indices
+
+            weights_real = np.array([uw_collapsed_real[i] * vw[j] for i in range(n_unique) for j in range(6)]) / w
+            weights_imag = np.array([uw_collapsed_imag[i] * vw[j] for i in range(n_unique) for j in range(6)]) / w
+
+            C_real[row_index, l_indices] = weights_real
+            C_imag[row_index, l_indices] = weights_imag
 
     return C_real, C_imag
 

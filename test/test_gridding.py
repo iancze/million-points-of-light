@@ -11,7 +11,7 @@ import gridding
 # convert from arcseconds to radians
 arcsec = np.pi / (180.0 * 3600) # [radians]  = 1/206265 radian/arcsec
 
-def sky_plane(alpha, dec, a=1, delta_alpha=0.0, delta_delta=0.0, sigma_alpha=1.0*arcsec,
+def sky_plane(alpha, dec, a=1, delta_alpha=1.0 * arcsec, delta_delta=1.0 * arcsec, sigma_alpha=1.0*arcsec,
               sigma_delta=1.0*arcsec, Omega=0.0):
     '''
     alpha: ra (in radians)
@@ -28,16 +28,17 @@ def sky_plane(alpha, dec, a=1, delta_alpha=0.0, delta_delta=0.0, sigma_alpha=1.0
                         (dec - delta_delta)**2/(2 * sigma_delta**2)))
 
 
-def fourier_plane(u, v, a=1, delta_alpha=0.0, delta_delta=0.0, sigma_alpha=1.0*arcsec,
+def fourier_plane(u, v, a=1, delta_alpha=1.0*arcsec, delta_delta=1.0*arcsec, sigma_alpha=1.0*arcsec,
               sigma_delta=1.0*arcsec, Omega=0.0):
     '''
     Calculate the Fourier transform of the Gaussian. Assumes u, v in kλ.
     '''
 
+    # convert back to radians
     u = u * 1e3
     v = v * 1e3
 
-    return 2 * np.pi * a * sigma_alpha * sigma_delta * np.exp(- 2 * np.pi**2 * (sigma_alpha**2 * u**2 + sigma_delta**2 * v**2) - 2 * np.pi * j * (delta_alpha * u + delta_delta * v))
+    return 2 * np.pi * a * sigma_alpha * sigma_delta * np.exp(- 2 * np.pi**2 * (sigma_alpha**2 * u**2 + sigma_delta**2 * v**2) - 2 * np.pi * 1.0j * (delta_alpha * u + delta_delta * v))
 
 
 def fftspace(width, N):
@@ -141,18 +142,17 @@ data_points = np.random.uniform(low=0.9 * np.min(vs), high=0.9 * np.max(vs), siz
 # ax.scatter(u_data, v_data)
 # fig.savefig("baselines.png", dpi=300)
 
-# First let's test the intpolation on some known u, v points that will have large values
+# First let's test the intpolation on some known u, v points that will have large visibility amplitudes
+# and some that suffer from edge cases
 # from the figures, these could be
-
-data_points = np.array([[50.0, 10.0], [50.0, 0.0], [50.0, -1.0], [-50.0, 10.0], [5.0, 1.0]])
+data_points = np.array([[50.0, 10.0], [50.0, 0.0], [50.0, -1.0],
+    [-50.0, 10.0], [5.0, 1.0], [-5.0, 1.0], [9.0, 1.0], [-9.0, 1.0]])
 u_data, v_data = data_points.T
 
 data_values = fourier_plane(u_data, v_data)
 
 # calculate and visualize the C_real and C_imag matrices
 C_real, C_imag = gridding.calc_matrices(data_points, us, vs)
-
-print(C_real.shape)
 
 fig, ax = plt.subplots(nrows=2, figsize=(12,6))
 ax[0].imshow(C_real[:,0:500], interpolation="none", origin="upper")
@@ -180,11 +180,3 @@ ax[3].plot(interp_imag - np.imag(data_values), ".")
 ax[3].set_ylabel("imag diff")
 fig.subplots_adjust(hspace=0.4, left=0.2)
 fig.savefig("real_comp.png", dpi=300)
-
-
-
-# FIX the edge-cases
-
-# use these to interpolate the RFFT output
-
-# compare the interpolated output to the real Gaussian values.
