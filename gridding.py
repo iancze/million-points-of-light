@@ -153,33 +153,66 @@ def calc_matrices(data_points, u_model, v_model):
     # for each data_point within the grid, calculate the row and insert it into the matrix
     for row_index, (u, v) in enumerate(data_points):
 
+        # Calculate two streams of v indices and weights assuming u is postive and assuming u is negative.
+        # This makes the code cleaner in subsequent steps.
+
+        # if v overlaps, need to split the indices between negative and positive frequencies
+        if np.abs(v) < (3 * dv): # v overlaps 0 border
+            if (v > 0):
+                j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
+                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+                j_indices[j_indices < 0] += Npix # those less than 0 get Npix added to them
+
+            else: #(v < 0)
+                j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
+                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+                j_indices[j_indices >= Npix] -= Npix # those greater than Npix get Npix subtracted from to them
+
+        else: # no v overlap w/ 0 border
+            if (v > 0):
+                j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
+            else: #(v < 0)
+                j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
+
+            j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+
+        v_etas = (v - v_model[j_indices]) / (3 * dv)
+        j_indices_pos = j_indices
+        vw_u_pos = gcffun(v_etas)
+
+
+        # now do it again as if we were querying values u < 0, which means -1.0 * v values
+        v_temp = -v
+
+        # if v overlaps, need to split the indices between negative and positive frequencies
+        if np.abs(v_temp) < (3 * dv): # v overlaps 0 border
+            if (v_temp > 0):
+                j0 = np.searchsorted(v_model[:Npix//2], v_temp) # only search the positive frequencies
+                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+                j_indices[j_indices < 0] += Npix # those less than 0 get Npix added to them
+
+            else: #(v < 0)
+                j0 = np.searchsorted(v_model[Npix//2:], v_temp) + Npix//2 # only search the negative frequencies
+                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+                j_indices[j_indices >= Npix] -= Npix # those greater than Npix get Npix subtracted from to them
+
+        else: # no v overlap w/ 0 border
+            if (v_temp > 0):
+                j0 = np.searchsorted(v_model[:Npix//2], v_temp) # only search the positive frequencies
+            else: #(v < 0)
+                j0 = np.searchsorted(v_model[Npix//2:], v_temp) + Npix//2 # only search the negative frequencies
+
+            j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+
+        v_etas = (v_temp - v_model[j_indices]) / (3 * dv)
+        j_indices_neg = j_indices
+        vw_u_neg = gcffun(v_etas)
+
         if (u > 0) and (np.abs(u) > 3 * du):
             # calculate for +u, with no overlap, which is the easiest
 
-            # if v overlaps, need to split the indices between negative and positive frequencies
-            if np.abs(v) < (3 * dv): # v overlaps 0 border
-                if (v > 0):
-                    j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
-                    j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-                    j_indices[j_indices < 0] += Npix # those less than 0 get Npix added to them
-
-                else: #(v < 0)
-                    j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
-                    j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-                    j_indices[j_indices >= Npix] -= Npix # those greater than Npix get Npix subtracted from to them
-
-            else: # no v overlap w/ 0 border
-                if (v > 0):
-                    j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
-                else: #(v < 0)
-                    j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
-
-                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-
-            v_etas = (v - v_model[j_indices]) / (3 * dv)
-            vw = gcffun(v_etas)
-            vw_real = vw
-            vw_imag = vw
+            vw_real = vw_u_pos
+            vw_imag = vw_u_pos
 
             # calculate the u values
             # find the nearest points in the array
@@ -187,7 +220,7 @@ def calc_matrices(data_points, u_model, v_model):
             i_indices = np.arange(i0 - 3, i0 + 3) # 6 points [i0-3,i0-2,i0-1,i0,i0+1,i0+2]
 
             # assemble a list of l indices into the flattened RFFT output
-            l_indices = np.array([i + j * vstride for i in i_indices for j in j_indices]) # list of 36 l indices
+            l_indices = np.array([i + j * vstride for i in i_indices for j in j_indices_pos]) # list of 36 l indices
 
             # calculate the u and v distances from the (u, v) datapoint to each of the l indices as a function of
             # eta in the domain 0 - 1
@@ -198,7 +231,7 @@ def calc_matrices(data_points, u_model, v_model):
             uw = gcffun(u_etas)
 
             # Normalization such that it has an area of 1. Divide by w later.
-            w = sum(uw) * sum(vw)
+            w = sum(uw) * sum(vw_real)
 
             # actual weight at a point is uw[i] * vw[j] / w
             # arrange the uw and vw weights in the same order as ls
@@ -214,32 +247,9 @@ def calc_matrices(data_points, u_model, v_model):
             # Calculate for -u, no overlap. This means we need to calculate at -v instead
             # (u < 0, v > 0 ) == *(u > 0, v < 0)
             # (u < 0, v < 0 ) == *(u > 0, v > 0)
-            v_temp = -v
 
-            # if v overlaps, need to split the indices between negative and positive frequencies
-            if np.abs(v_temp) < (3 * dv): # v overlaps 0 border
-                if (v_temp > 0):
-                    j0 = np.searchsorted(v_model[:Npix//2], v_temp) # only search the positive frequencies
-                    j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-                    j_indices[j_indices < 0] += Npix # those less than 0 get Npix added to them
-
-                else: #(v < 0)
-                    j0 = np.searchsorted(v_model[Npix//2:], v_temp) + Npix//2 # only search the negative frequencies
-                    j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-                    j_indices[j_indices >= Npix] -= Npix # those greater than Npix get Npix subtracted from to them
-
-            else: # no v overlap w/ 0 border
-                if (v_temp > 0):
-                    j0 = np.searchsorted(v_model[:Npix//2], v_temp) # only search the positive frequencies
-                else: #(v < 0)
-                    j0 = np.searchsorted(v_model[Npix//2:], v_temp) + Npix//2 # only search the negative frequencies
-
-                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-
-            v_etas = (v_temp - v_model[j_indices]) / (3 * dv)
-            vw = gcffun(v_etas)
-            vw_real = vw
-            vw_imag = -vw
+            vw_real = vw_u_neg
+            vw_imag = -vw_u_neg # complex conjugate
 
             # calculate the u values
             # find the nearest points in the array
@@ -247,7 +257,7 @@ def calc_matrices(data_points, u_model, v_model):
             i_indices = np.arange(i0 - 3, i0 + 3) # 6 points [i0-3,i0-2,i0-1,i0,i0+1,i0+2]
 
             # assemble a list of l indices into the flattened RFFT output
-            l_indices = np.array([i + j * vstride for i in i_indices for j in j_indices]) # list of 36 l indices
+            l_indices = np.array([i + j * vstride for i in i_indices for j in j_indices_neg]) # list of 36 l indices
 
             # calculate the u and v distances from the (u, v) datapoint to each of the l indices as a function of
             # eta in the domain 0 - 1
@@ -258,7 +268,7 @@ def calc_matrices(data_points, u_model, v_model):
             uw = gcffun(u_etas)
 
             # Normalization such that it has an area of 1. Divide by w later.
-            w = sum(uw) * sum(vw)
+            w = sum(uw) * sum(vw_real)
 
             # actual weight at a point is uw[i] * vw[j] / w
             # arrange the uw and vw weights in the same order as ls
@@ -274,39 +284,34 @@ def calc_matrices(data_points, u_model, v_model):
             # so we need to identify two sets of j indices, for - and + uvalues.
             # as we move through the grid, use the value that corresponds to the correct u sign.
 
-            
+            # imaginary weights will need to be negated
+
+            print("u overlap", row_index, u, "du", du, "v", v)
+            #
+            # 1) calculate the 6 distances (eta_us) between the current u point and the adjacent values
+            i0 = np.searchsorted(u_model, np.abs(u))
+
+            # i_indices was originally calculated assuming that all u values were either negative or positive.
+            # but since they straddle, we need to separate them here to rearrange the order of the u_etas
+            if u > 0:
+                i_indices = np.arange(i0 - 3, i0 + 3) # 6 points
+                u_etas = (i_indices - u/du) / 3
+            else:
+                i_indices = np.arange(-i0 - 2, -i0 + 4) # 6 points
+                u_etas = (i_indices - u/du) / 3
+
+            print("u_etas", u_etas)
+
+            # 2) calculate the 6 u-weights
+            uw = gcffun(u_etas)
+            print("uw", uw)
+
+            # calculate all of the l indices
+            l_indices = np.array([i + j * vstride for i in i_indices for j in j_indices]) # list of 36 l indices
 
 
-            # u overlap
-            # we'll start out with 36 grid interpolation points, but because of the reflective mirroring,
-            # we'll actually be querying the same point twice with different weights,
-            # so, these weights should add.
 
-            # print()
-            # print("u overlap", row_index, u, "du", du, "v", v)
-            #
-            # # 1) calculate the 6 distances (eta_us) between the current u point and the adjacent values
-            # i0 = np.searchsorted(u_model, np.abs(u))
-            #
-            # # Can delete later
-            # distance_right = i0 - np.abs(u)/du # towards increasing u values
-            # print("distance_right", distance_right)
-            #
-            # # 4) Figure out how many unique i-values we will have after overlap
-            # # i_indices was originally calculated assuming that all u values were either negative or positive.
-            # # but since they straddle, we need to separate them here to rearrange the order of the u_etas
-            # if u > 0:
-            #     i_indices = np.arange(i0 - 3, i0 + 3) # 6 points
-            #     u_etas = (i_indices - u/du) / 3
-            # else:
-            #     i_indices = np.arange(-i0 - 2, -i0 + 4) # 6 points
-            #     u_etas = (i_indices - u/du) / 3
-            #
-            # print("u_etas", u_etas)
-            #
-            # # 2) calculate the 6 u-weights
-            # uw = gcffun(u_etas)
-            # print("uw", uw)
+
             #
             # # 3) use these, with the v-values, to calculate the normalization w
             # w = sum(uw) * sum(vw)
