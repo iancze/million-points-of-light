@@ -104,6 +104,7 @@ vs = np.fft.fftfreq(N_dec, d=ddelta) * 1e-3 # convert to [kλ]
 # calculate the FFT, but first shift all axes.
 # normalize output properly
 vis = dalpha * ddelta * np.fft.rfftn(corrfun_mat * np.fft.fftshift(img), axes=(0,1))
+vis_no_cor = dalpha * ddelta * np.fft.rfftn(np.fft.fftshift(img), axes=(0,1))
 
 # calculate the corresponding u and v axes
 XX, YY = np.meshgrid(us, vs)
@@ -111,12 +112,24 @@ XX, YY = np.meshgrid(us, vs)
 # left, right, bottom, top
 vs_limit = np.fft.fftshift(vs)
 
+
+XX_full, YY_full = np.meshgrid(vs, vs)
+vis_analytical_full = fourier_plane(XX_full, YY_full)
+
+ext_full = [vs_limit[-1], vs_limit[0], vs_limit[-1], vs_limit[0]]
+fig, ax = plt.subplots(nrows=2)
+ax[0].imshow(np.real(np.fft.fftshift(vis_analytical_full)), origin="upper", extent=ext_full)
+ax[1].imshow(np.imag(np.fft.fftshift(vis_analytical_full)), origin="upper", extent=ext_full)
+fig.savefig("analytical_full.png", dpi=300)
+
+
+
 ext = [us[0], us[-1], vs_limit[-1], vs_limit[0]]
 
 fig, ax = plt.subplots(nrows=2, ncols=3, figsize=(7, 5))
 ax[0,0].set_title("numerical")
-ax[0,0].imshow(np.real(np.fft.fftshift(vis, axes=0)), origin="upper", interpolation="none", aspect="equal", extent=ext)
-ax[1,0].imshow(np.imag(np.fft.fftshift(vis, axes=0)), origin="upper", interpolation="none", aspect="equal", extent=ext)
+ax[0,0].imshow(np.real(np.fft.fftshift(vis_no_cor, axes=0)), origin="upper", interpolation="none", aspect="equal", extent=ext)
+ax[1,0].imshow(np.imag(np.fft.fftshift(vis_no_cor, axes=0)), origin="upper", interpolation="none", aspect="equal", extent=ext)
 
 ax[0,1].set_title("analytical")
 vis_analytical = fourier_plane(XX, YY)
@@ -126,9 +139,9 @@ ax[1,1].imshow(np.imag(np.fft.fftshift(vis_analytical, axes=0)), origin="upper",
 
 # compare to the analytic version
 ax[0,2].set_title("difference")
-im_real = ax[0,2].imshow(np.real(np.fft.fftshift(vis - vis_analytical, axes=0)), origin="upper", interpolation="none", aspect="equal", extent=ext)
+im_real = ax[0,2].imshow(np.real(np.fft.fftshift(vis_no_cor - vis_analytical, axes=0)), origin="upper", interpolation="none", aspect="equal", extent=ext)
 plt.colorbar(im_real, ax=ax[0,2])
-im_imag = ax[1,2].imshow(np.imag(np.fft.fftshift(vis - vis_analytical, axes=0)), origin="upper", interpolation="none", aspect="equal", extent=ext)
+im_imag = ax[1,2].imshow(np.imag(np.fft.fftshift(vis_no_cor - vis_analytical, axes=0)), origin="upper", interpolation="none", aspect="equal", extent=ext)
 plt.colorbar(im_imag, ax=ax[1,2])
 
 fig.savefig("output.png", dpi=300, wspace=0.05)
@@ -155,12 +168,14 @@ data_values = fourier_plane(u_data, v_data)
 C_real, C_imag = gridding.calc_matrices(data_points, us, vs)
 
 fig, ax = plt.subplots(nrows=2, figsize=(12,6))
-ax[0].imshow(C_real[:,0:500], interpolation="none", origin="upper")
-ax[1].spy(C_real[:,0:500])
+vvmax = np.max(np.abs(C_real[:,0:300]))
+ax[0].imshow(C_real[:,0:300], interpolation="none", origin="upper", cmap="RdBu", aspect="auto", vmin=-vvmax, vmax=vvmax)
+ax[1].spy(C_real[:,0:300])
 fig.savefig("C_real.png", dpi=300)
 
 fig, ax = plt.subplots(ncols=1, figsize=(12,3))
-ax.imshow(C_imag[:,0:500], interpolation="none", origin="upper")
+vvmax = np.max(np.abs(C_imag[:,0:300]))
+ax.imshow(C_imag[:,0:300], interpolation="none", origin="upper", cmap="RdBu", aspect="auto", vmin=-vvmax, vmax=vvmax)
 fig.savefig("C_imag.png", dpi=300)
 
 # interpolated points
