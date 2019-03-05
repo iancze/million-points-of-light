@@ -283,9 +283,9 @@ def calc_matrices(data_points, u_model, v_model):
             # u is sufficiently close to zero that we need to query both - and + u values from the grid
             # so we need to identify two sets of j indices, for - and + uvalues.
             # as we move through the grid, use the value that corresponds to the correct u sign.
+            # imaginary weights will need to be negated as the complex conjugate
 
-            # imaginary weights will need to be negated
-
+            print()
             print("u overlap", row_index, u, "du", du, "v", v)
             #
             # 1) calculate the 6 distances (eta_us) between the current u point and the adjacent values
@@ -300,70 +300,57 @@ def calc_matrices(data_points, u_model, v_model):
                 i_indices = np.arange(-i0 - 2, -i0 + 4) # 6 points
                 u_etas = (i_indices - u/du) / 3
 
-            print("u_etas", u_etas)
+            # print("u_etas", u_etas)
 
             # 2) calculate the 6 u-weights
             uw = gcffun(u_etas)
-            print("uw", uw)
+            # print("uw", uw)
 
             # calculate all of the l indices
-            l_indices = np.array([i + j * vstride for i in i_indices for j in j_indices]) # list of 36 l indices
+            # rather than do this with a list comprehension as before, do this with a double for loop since
+            # this will be easier to understand.
+
+            print("j_indices_neg", j_indices_neg)
+            print("j_indices_pos", j_indices_pos)
+
+            l_indices = np.zeros(36, dtype=np.int)
+            weights_real = np.zeros(36)
+            weights_imag = np.zeros(36)
+            for i in range(6):
+                i_index = i_indices[i]
+                uw_i = uw[i]
+
+                for j in range(6):
+
+                    if i_index < 0:
+                        j_index = j_indices_neg[j]
+                        vw_j = vw_u_neg[j]
+                    else:
+                        j_index = j_indices_pos[j]
+                        vw_j = vw_u_pos[j]
+
+                    # we needed the i_index to be pos or negative to tell us whether we were querying
+                    # + or - u values, but to index into the RFFT array we need only positive i indices
+                    i_index_array = np.abs(i_index)
+
+                    k = i * 6 + j
+
+                    l_indices[k] = i_index_array + j_index * vstride
+                    weights_real[k] = uw_i * vw_j
+                    weights_imag[k] = uw_i * -vw_j
+
+            print(l_indices)
+            print(weights_real)
+
+            # calculate the normalization
+            w = sum(weights_real)
+
+            weights_real = weights_real / w
+            weights_imag = weights_imag / w
 
 
-
-
-            #
-            # # 3) use these, with the v-values, to calculate the normalization w
-            # w = sum(uw) * sum(vw)
-            #
-            #
-            # print("i_indices", i_indices)
-            # n_unique = np.max(np.abs(i_indices)) + 1 # 1 is to count 0 index as well
-            # print("n_unique", n_unique)
-            #
-            # ind_pos = (i_indices >= 0)
-            # n_pos = np.sum(ind_pos)
-            # print("ind_pos", ind_pos)
-            # print("n_pos", n_pos)
-            #
-            # # 5) Create a shortened storage array
-            # uw_collapsed_real = np.zeros(n_unique)
-            # uw_collapsed_imag = np.zeros(n_unique)
-            #
-            # # insert the positive values
-            # uw_collapsed_real[:n_pos] = uw[ind_pos]
-            # uw_collapsed_imag[:n_pos] = uw[ind_pos]
-            #
-            # print("uw_collapsed_real", uw_collapsed_real)
-            # print("uw_collapsed_imag", uw_collapsed_imag)
-            #
-            # # 6) find the indices of the negative values
-            # ind_neg = ~ind_pos
-            # position_neg = np.abs(i_indices[ind_neg])
-            # print(position_neg, "position_neg")
-            #
-            # # add them to the existing weights
-            # uw_collapsed_real[position_neg] += uw[ind_neg]
-            # uw_collapsed_imag[position_neg] += -uw[ind_neg] # complex conjugate for imaginary values
-            # print("uw_collapsed_real", uw_collapsed_real)
-            # print("uw_collapsed_imag", uw_collapsed_imag)
-            #
-            #
-            # # For every negative u point, we actually need to be querying the complex conjugate of the
-            # # -v point as well.
-            #
-            # # 7) assemble a list of l indices into the flattened RFFT output
-            # # note that we're looping over range(n_unique) rather than i_indices
-            # l_indices = np.array([i + j * vstride for i in range(n_unique) for j in j_indices]) # list of 36 l indices
-            #
-            # weights_real = np.array([uw_collapsed_real[i] * vw[j] for i in range(n_unique) for j in range(6)]) / w
-            # weights_imag = np.array([uw_collapsed_imag[i] * vw[j] for i in range(n_unique) for j in range(6)]) / w
-
-            # C_real[row_index, l_indices] = weights_real
-            # C_imag[row_index, l_indices] = weights_imag
-
-            C_real[row_index, l_indices] = np.nan
-            C_imag[row_index, l_indices] = np.nan
+            C_real[row_index, l_indices] = weights_real
+            C_imag[row_index, l_indices] = weights_imag
 
         else:
             print("Shouldn't have gotten here.")
@@ -376,3 +363,54 @@ def calc_matrices(data_points, u_model, v_model):
 # it is more efficient to use a compressed sparse column (row) matrix
 # according to Theano,
 # If shape[0] > shape[1], use csc format. Otherwise, use csr.
+
+
+#
+# # 3) use these, with the v-values, to calculate the normalization w
+# w = sum(uw) * sum(vw)
+#
+#
+# print("i_indices", i_indices)
+# n_unique = np.max(np.abs(i_indices)) + 1 # 1 is to count 0 index as well
+# print("n_unique", n_unique)
+#
+# ind_pos = (i_indices >= 0)
+# n_pos = np.sum(ind_pos)
+# print("ind_pos", ind_pos)
+# print("n_pos", n_pos)
+#
+# # 5) Create a shortened storage array
+# uw_collapsed_real = np.zeros(n_unique)
+# uw_collapsed_imag = np.zeros(n_unique)
+#
+# # insert the positive values
+# uw_collapsed_real[:n_pos] = uw[ind_pos]
+# uw_collapsed_imag[:n_pos] = uw[ind_pos]
+#
+# print("uw_collapsed_real", uw_collapsed_real)
+# print("uw_collapsed_imag", uw_collapsed_imag)
+#
+# # 6) find the indices of the negative values
+# ind_neg = ~ind_pos
+# position_neg = np.abs(i_indices[ind_neg])
+# print(position_neg, "position_neg")
+#
+# # add them to the existing weights
+# uw_collapsed_real[position_neg] += uw[ind_neg]
+# uw_collapsed_imag[position_neg] += -uw[ind_neg] # complex conjugate for imaginary values
+# print("uw_collapsed_real", uw_collapsed_real)
+# print("uw_collapsed_imag", uw_collapsed_imag)
+#
+#
+# # For every negative u point, we actually need to be querying the complex conjugate of the
+# # -v point as well.
+#
+# # 7) assemble a list of l indices into the flattened RFFT output
+# # note that we're looping over range(n_unique) rather than i_indices
+# l_indices = np.array([i + j * vstride for i in range(n_unique) for j in j_indices]) # list of 36 l indices
+#
+# weights_real = np.array([uw_collapsed_real[i] * vw[j] for i in range(n_unique) for j in range(6)]) / w
+# weights_imag = np.array([uw_collapsed_imag[i] * vw[j] for i in range(n_unique) for j in range(6)]) / w
+
+# C_real[row_index, l_indices] = weights_real
+# C_imag[row_index, l_indices] = weights_imag
