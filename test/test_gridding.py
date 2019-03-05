@@ -158,8 +158,11 @@ data_points = np.random.uniform(low=0.9 * np.min(vs), high=0.9 * np.max(vs), siz
 # First let's test the intpolation on some known u, v points that will have large visibility amplitudes
 # and some that suffer from edge cases
 # from the figures, these could be
-data_points = np.array([[50.0, 10.0], [50.0, 0.0], [50.0, -1.0],
-    [-50.0, 10.0], [5.0, 1.0], [-5.0, 1.0], [9.0, 1.0], [-9.0, 1.0]])
+# data_points = np.array([[50.0, 10.0], [50.0, 0.0], [50.0, -1.0],
+    # [-50.0, 10.0],
+
+data_points = np.array([[5.0, 1.0], [-5.0, 1.0], [5.0, 15.0], [-5.0, -15.0]])
+
 u_data, v_data = data_points.T
 
 data_values = fourier_plane(u_data, v_data)

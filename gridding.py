@@ -286,7 +286,7 @@ def calc_matrices(data_points, u_model, v_model):
             # imaginary weights will need to be negated as the complex conjugate
 
             print()
-            print("u overlap", row_index, u, "du", du, "v", v)
+            print("u overlap", row_index, "u", u, "du", du, "v", v, "dv", dv)
             #
             # 1) calculate the 6 distances (eta_us) between the current u point and the adjacent values
             i0 = np.searchsorted(u_model, np.abs(u))
@@ -312,6 +312,7 @@ def calc_matrices(data_points, u_model, v_model):
 
             print("j_indices_neg", j_indices_neg)
             print("j_indices_pos", j_indices_pos)
+            print("i_indices", i_indices)
 
             l_indices = np.zeros(36, dtype=np.int)
             weights_real = np.zeros(36)
@@ -335,12 +336,14 @@ def calc_matrices(data_points, u_model, v_model):
 
                     k = i * 6 + j
 
+                    print("k:", k, "i_index", i_index, "j_index", j_index)
+
                     l_indices[k] = i_index_array + j_index * vstride
                     weights_real[k] = uw_i * vw_j
                     weights_imag[k] = uw_i * -vw_j
 
-            print(l_indices)
-            print(weights_real)
+            # print(l_indices)
+            # print(weights_real)
 
             # calculate the normalization
             w = sum(weights_real)
