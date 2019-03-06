@@ -150,214 +150,106 @@ def calc_matrices(data_points, u_model, v_model):
     du = np.abs(u_model[1] - u_model[0])
     dv = np.abs(v_model[1] - v_model[0])
 
+
     # for each data_point within the grid, calculate the row and insert it into the matrix
     for row_index, (u, v) in enumerate(data_points):
 
-        # Calculate two streams of v indices and weights assuming u is postive and assuming u is negative.
-        # This makes the code cleaner in subsequent steps.
+        # assuming the grid stretched for -/+ values easily
+        i0 = np.int(np.ceil(u/du))
+        j0 = np.int(np.ceil(v/dv))
 
-        # if v overlaps, need to split the indices between negative and positive frequencies
-        if np.abs(v) < (3 * dv): # v overlaps 0 border
-            if (v > 0):
-                j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
-                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-                j_indices[j_indices < 0] += Npix # those less than 0 get Npix added to them
+        i_indices = np.arange(i0 - 3, i0 + 3)
+        j_indices = np.arange(j0 - 3, j0 + 3)
 
-            else: #(v < 0)
-                j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
-                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-                j_indices[j_indices >= Npix] -= Npix # those greater than Npix get Npix subtracted from to them
+        # calculate the etas and weights
+        u_etas = (u/du - i_indices) / 3
+        v_etas = (v/dv - j_indices) / 3
 
-        else: # no v overlap w/ 0 border
-            if (v > 0):
-                j0 = np.searchsorted(v_model[:Npix//2], v) # only search the positive frequencies
-            else: #(v < 0)
-                j0 = np.searchsorted(v_model[Npix//2:], v) + Npix//2 # only search the negative frequencies
+        uw = gcffun(u_etas)
+        vw = gcffun(v_etas)
 
-            j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
+        w = np.sum(uw) * np.sum(vw)
 
-        v_etas = (v - v_model[j_indices]) / (3 * dv)
-        j_indices_pos = j_indices
-        vw_u_pos = gcffun(v_etas)
+        l_indices = np.zeros(36, dtype=np.int)
+        weights_real = np.zeros(36, dtype=np.float)
+        weights_imag = np.zeros(36, dtype=np.float)
 
-
-        # now do it again as if we were querying values u < 0, which means -1.0 * v values
-        v_temp = -v
-
-        # if v overlaps, need to split the indices between negative and positive frequencies
-        if np.abs(v_temp) < (3 * dv): # v overlaps 0 border
-            if (v_temp > 0):
-                j0 = np.searchsorted(v_model[:Npix//2], v_temp) # only search the positive frequencies
-                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-                j_indices[j_indices < 0] += Npix # those less than 0 get Npix added to them
-
-            else: #(v < 0)
-                j0 = np.searchsorted(v_model[Npix//2:], v_temp) + Npix//2 # only search the negative frequencies
-                j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-                j_indices[j_indices >= Npix] -= Npix # those greater than Npix get Npix subtracted from to them
-
-        else: # no v overlap w/ 0 border
-            if (v_temp > 0):
-                j0 = np.searchsorted(v_model[:Npix//2], v_temp) # only search the positive frequencies
-            else: #(v < 0)
-                j0 = np.searchsorted(v_model[Npix//2:], v_temp) + Npix//2 # only search the negative frequencies
-
-            j_indices = np.arange(j0 - 3, j0 + 3) # 6 points [j0-3,j0-2,j0-1,j0,j0+1,j0+2]
-
-        v_etas = (v_temp - v_model[j_indices]) / (3 * dv)
-        j_indices_neg = j_indices
-        vw_u_neg = gcffun(v_etas)
-
-        if (u > 0) and (np.abs(u) > 3 * du):
-            # calculate for +u, with no overlap, which is the easiest
-
-            vw_real = vw_u_pos
-            vw_imag = vw_u_pos
-
-            # calculate the u values
-            # find the nearest points in the array
-            i0 = np.searchsorted(u_model, u)
-            i_indices = np.arange(i0 - 3, i0 + 3) # 6 points [i0-3,i0-2,i0-1,i0,i0+1,i0+2]
-
-            # assemble a list of l indices into the flattened RFFT output
-            l_indices = np.array([i + j * vstride for i in i_indices for j in j_indices_pos]) # list of 36 l indices
-
-            # calculate the u and v distances from the (u, v) datapoint to each of the l indices as a function of
-            # eta in the domain 0 - 1
-            # the 3 is because we have 3 points on either side
-            u_etas = (np.abs(u) - u_model[i_indices]) / (3 * du)
-
-            # evaluate the spheroid here
-            uw = gcffun(u_etas)
-
-            # Normalization such that it has an area of 1. Divide by w later.
-            w = sum(uw) * sum(vw_real)
-
-            # actual weight at a point is uw[i] * vw[j] / w
-            # arrange the uw and vw weights in the same order as ls
-            weights_real = np.array([uw[i] * vw_real[j] for i in range(6) for j in range(6)]) / w
-            weights_imag = np.array([uw[i] * vw_imag[j] for i in range(6) for j in range(6)]) / w
-
-            # insert this into the C matrix at the corresponding locations (the ls)
-            C_real[row_index,l_indices] = weights_real
-            C_imag[row_index,l_indices] = weights_imag
-
-
-        elif (u < 0) and (np.abs(u) > 3 * du):
-            # Calculate for -u, no overlap. This means we need to calculate at -v instead
-            # (u < 0, v > 0 ) == *(u > 0, v < 0)
-            # (u < 0, v < 0 ) == *(u > 0, v > 0)
-
-            vw_real = vw_u_neg
-            vw_imag = -vw_u_neg # complex conjugate
-
-            # calculate the u values
-            # find the nearest points in the array
-            i0 = np.searchsorted(u_model, np.abs(u))
-            i_indices = np.arange(i0 - 3, i0 + 3) # 6 points [i0-3,i0-2,i0-1,i0,i0+1,i0+2]
-
-            # assemble a list of l indices into the flattened RFFT output
-            l_indices = np.array([i + j * vstride for i in i_indices for j in j_indices_neg]) # list of 36 l indices
-
-            # calculate the u and v distances from the (u, v) datapoint to each of the l indices as a function of
-            # eta in the domain 0 - 1
-            # the 3 is because we have 3 points on either side
-            u_etas = (np.abs(u) - u_model[i_indices]) / (3 * du)
-
-            # evaluate the spheroid here
-            uw = gcffun(u_etas)
-
-            # Normalization such that it has an area of 1. Divide by w later.
-            w = sum(uw) * sum(vw_real)
-
-            # actual weight at a point is uw[i] * vw[j] / w
-            # arrange the uw and vw weights in the same order as ls
-            weights_real = np.array([uw[i] * vw_real[j] for i in range(6) for j in range(6)]) / w
-            weights_imag = np.array([uw[i] * vw_imag[j] for i in range(6) for j in range(6)]) / w
-
-            # insert this into the C matrix at the corresponding locations (the ls)
-            C_real[row_index,l_indices] = weights_real
-            C_imag[row_index,l_indices] = weights_imag
-
-        elif (np.abs(u) < 3 * du):
-            # u is sufficiently close to zero that we need to query both - and + u values from the grid
-            # so we need to identify two sets of j indices, for - and + uvalues.
-            # as we move through the grid, use the value that corresponds to the correct u sign.
-            # imaginary weights will need to be negated as the complex conjugate
-
-            print()
-            print("u overlap", row_index, "u", u, "du", du, "v", v, "dv", dv)
-            #
-            # 1) calculate the 6 distances (eta_us) between the current u point and the adjacent values
-            i0 = np.searchsorted(u_model, np.abs(u))
-
-            # i_indices was originally calculated assuming that all u values were either negative or positive.
-            # but since they straddle, we need to separate them here to rearrange the order of the u_etas
-            if u > 0:
-                i_indices = np.arange(i0 - 3, i0 + 3) # 6 points
-                u_etas = (i_indices - u/du) / 3
-            else:
-                i_indices = np.arange(-i0 - 2, -i0 + 4) # 6 points
-                u_etas = (i_indices - u/du) / 3
-
-            # print("u_etas", u_etas)
-
-            # 2) calculate the 6 u-weights
-            uw = gcffun(u_etas)
-            # print("uw", uw)
-
-            # calculate all of the l indices
-            # rather than do this with a list comprehension as before, do this with a double for loop since
-            # this will be easier to understand.
-
-            print("j_indices_neg", j_indices_neg)
-            print("j_indices_pos", j_indices_pos)
-            print("i_indices", i_indices)
-
-            l_indices = np.zeros(36, dtype=np.int)
-            weights_real = np.zeros(36)
-            weights_imag = np.zeros(36)
+        # loop through all 36 points and calculate the matrix element
+        # do it in this order because u indices change the quickest
+        for j in range(6):
             for i in range(6):
+                k = j * 6 + i
+
                 i_index = i_indices[i]
-                uw_i = uw[i]
 
-                for j in range(6):
+                if i_index >= 0:
+                    j_index = j_indices[j]
+                    imag_prefactor = 1.0
 
-                    if i_index < 0:
-                        j_index = j_indices_neg[j]
-                        vw_j = vw_u_neg[j]
-                    else:
-                        j_index = j_indices_pos[j]
-                        vw_j = vw_u_pos[j]
+                else: # i_index < 0:
+                    # map negative i index to positive i_index
+                    i_index = - i_index
 
-                    # we needed the i_index to be pos or negative to tell us whether we were querying
-                    # + or - u values, but to index into the RFFT array we need only positive i indices
-                    i_index_array = np.abs(i_index)
+                    # map j index to opposite sign
+                    j_index = -j_indices[j]
 
-                    k = i * 6 + j
+                    # take the complex conjugate for the imaginary weight
+                    imag_prefactor = -1.0
 
-                    print("k:", k, "i_index", i_index, "j_index", j_index)
+                # shrink j to fit in the range of [0, Npix]
+                if j_index < 0:
+                    j_index += Npix
 
-                    l_indices[k] = i_index_array + j_index * vstride
-                    weights_real[k] = uw_i * vw_j
-                    weights_imag[k] = uw_i * -vw_j
+                l_indices[k] = i_index + j_index * vstride
+                weights_real[k] = uw[i] * vw[j] / w
+                weights_imag[k] = imag_prefactor * uw[i] * vw[j] / w
 
-            # print(l_indices)
-            # print(weights_real)
+        # TODO: at the end, decide whether there is overlap and consolidate
+        l_sorted, unique_indices, unique_inverse, unique_counts = np.unique(l_indices, return_index=True, return_inverse=True, return_counts=True)
+        if len(unique_indices) < 36:
+            # Some indices are querying the same point in the RFFT grid, and their weights need to be
+            # consolidated
 
-            # calculate the normalization
-            w = sum(weights_real)
+            N_unique = len(l_sorted)
+            condensed_weights_real = np.zeros(N_unique)
+            condensed_weights_imag = np.zeros(N_unique)
 
-            weights_real = weights_real / w
-            weights_imag = weights_imag / w
+            # find where unique_counts > 1
+            ind_multiple = (unique_counts > 1)
+
+            # take the single weights from the array
+            ind_single = ~ind_multiple
+
+            # these are the indices back to the original weights of sorted singles
+            # unique_indices[ind_single]
+
+            # get the weights of the values that only occur once
+            condensed_weights_real[ind_single] = weights_real[unique_indices[ind_single]]
+            condensed_weights_imag[ind_single] = weights_imag[unique_indices[ind_single]]
+
+            # the indices that occur multiple times
+            # l_sorted[ind_multiple]
+
+            # the indices of indices that occur multiple times
+            ind_arg = np.where(ind_multiple)[0]
+
+            for repeated_index in ind_arg:
+                # figure out the indices of the repeated indices in the orginal flattened index array
+                repeats = np.where(l_sorted[repeated_index] == l_indices)
+
+                # stuff the sum of these weights into the condensed array
+                condensed_weights_real[repeated_index] = np.sum(weights_real[repeats])
+                condensed_weights_imag[repeated_index] = np.sum(weights_imag[repeats])
+
+            # remap these variables to the shortened arrays
+            l_indices = l_sorted
+            weights_real = condensed_weights_real
+            weights_imag = condensed_weights_imag
 
 
-            C_real[row_index, l_indices] = weights_real
-            C_imag[row_index, l_indices] = weights_imag
+        C_real[row_index,l_indices] = weights_real
+        C_imag[row_index,l_indices] = weights_imag
 
-        else:
-            print("Shouldn't have gotten here.")
-            raise
 
     return C_real, C_imag
 
@@ -366,54 +258,3 @@ def calc_matrices(data_points, u_model, v_model):
 # it is more efficient to use a compressed sparse column (row) matrix
 # according to Theano,
 # If shape[0] > shape[1], use csc format. Otherwise, use csr.
-
-
-#
-# # 3) use these, with the v-values, to calculate the normalization w
-# w = sum(uw) * sum(vw)
-#
-#
-# print("i_indices", i_indices)
-# n_unique = np.max(np.abs(i_indices)) + 1 # 1 is to count 0 index as well
-# print("n_unique", n_unique)
-#
-# ind_pos = (i_indices >= 0)
-# n_pos = np.sum(ind_pos)
-# print("ind_pos", ind_pos)
-# print("n_pos", n_pos)
-#
-# # 5) Create a shortened storage array
-# uw_collapsed_real = np.zeros(n_unique)
-# uw_collapsed_imag = np.zeros(n_unique)
-#
-# # insert the positive values
-# uw_collapsed_real[:n_pos] = uw[ind_pos]
-# uw_collapsed_imag[:n_pos] = uw[ind_pos]
-#
-# print("uw_collapsed_real", uw_collapsed_real)
-# print("uw_collapsed_imag", uw_collapsed_imag)
-#
-# # 6) find the indices of the negative values
-# ind_neg = ~ind_pos
-# position_neg = np.abs(i_indices[ind_neg])
-# print(position_neg, "position_neg")
-#
-# # add them to the existing weights
-# uw_collapsed_real[position_neg] += uw[ind_neg]
-# uw_collapsed_imag[position_neg] += -uw[ind_neg] # complex conjugate for imaginary values
-# print("uw_collapsed_real", uw_collapsed_real)
-# print("uw_collapsed_imag", uw_collapsed_imag)
-#
-#
-# # For every negative u point, we actually need to be querying the complex conjugate of the
-# # -v point as well.
-#
-# # 7) assemble a list of l indices into the flattened RFFT output
-# # note that we're looping over range(n_unique) rather than i_indices
-# l_indices = np.array([i + j * vstride for i in range(n_unique) for j in j_indices]) # list of 36 l indices
-#
-# weights_real = np.array([uw_collapsed_real[i] * vw[j] for i in range(n_unique) for j in range(6)]) / w
-# weights_imag = np.array([uw_collapsed_imag[i] * vw[j] for i in range(n_unique) for j in range(6)]) / w
-
-# C_real[row_index, l_indices] = weights_real
-# C_imag[row_index, l_indices] = weights_imag

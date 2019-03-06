@@ -159,9 +159,9 @@ data_points = np.random.uniform(low=0.9 * np.min(vs), high=0.9 * np.max(vs), siz
 # and some that suffer from edge cases
 # from the figures, these could be
 # data_points = np.array([[50.0, 10.0], [50.0, 0.0], [50.0, -1.0],
-    # [-50.0, 10.0],
+    # [-50.0, 10.0], [5.0, 1.0], [-5.0, 1.0], [5.0, 20.0], [-5.0, -20.0]])
 
-data_points = np.array([[5.0, 1.0], [-5.0, 1.0], [5.0, 15.0], [-5.0, -15.0]])
+# data_points = np.array([[5.0, 1.0], [-5.0, 1.0]])
 
 u_data, v_data = data_points.T
 
