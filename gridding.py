@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.sparse import csc_matrix
 
 # implementation of the gridding convolution functions and image pre-multiply
 
@@ -251,10 +252,15 @@ def calc_matrices(data_points, u_model, v_model):
         C_imag[row_index,l_indices] = weights_imag
 
 
-    return C_real, C_imag
+    C_real_sparse = csc_matrix(C_real)
+    C_imag_sparse = csc_matrix(C_imag)
+
+    # return C_real, C_imag
+    return C_real_sparse, C_imag_sparse
 
 
 # since we will probably have the case that len(data_points) > (len(u_model) * len(v_model)),
-# it is more efficient to use a compressed sparse column (row) matrix
+# it is more efficient to use a compressed sparse column (csc) matrix
+
 # according to Theano,
 # If shape[0] > shape[1], use csc format. Otherwise, use csr.

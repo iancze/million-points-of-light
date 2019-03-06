@@ -151,6 +151,9 @@ np.random.seed(42)
 N_vis = 50
 data_points = np.random.uniform(low=0.9 * np.min(vs), high=0.9 * np.max(vs), size=(N_vis, 2))
 
+# rather than completely random, let's try to choose something that sort of makes sense to compare to a real array
+
+
 # fig, ax = plt.subplots(nrows=1)
 # ax.scatter(u_data, v_data)
 # fig.savefig("baselines.png", dpi=300)
@@ -158,8 +161,8 @@ data_points = np.random.uniform(low=0.9 * np.min(vs), high=0.9 * np.max(vs), siz
 # First let's test the intpolation on some known u, v points that will have large visibility amplitudes
 # and some that suffer from edge cases
 # from the figures, these could be
-# data_points = np.array([[50.0, 10.0], [50.0, 0.0], [50.0, -1.0],
-    # [-50.0, 10.0], [5.0, 1.0], [-5.0, 1.0], [5.0, 20.0], [-5.0, -20.0]])
+data_points = np.array([[50.0, 10.0], [50.0, 0.0], [50.0, -1.0],
+    [-50.0, 10.0], [5.0, 1.0], [-5.0, 1.0], [5.0, 20.0], [-5.0, -20.0]])
 
 # data_points = np.array([[5.0, 1.0], [-5.0, 1.0]])
 
@@ -168,22 +171,23 @@ u_data, v_data = data_points.T
 data_values = fourier_plane(u_data, v_data)
 
 # calculate and visualize the C_real and C_imag matrices
+# these are scipy csc sparse matrices
 C_real, C_imag = gridding.calc_matrices(data_points, us, vs)
 
 fig, ax = plt.subplots(nrows=2, figsize=(12,6))
 vvmax = np.max(np.abs(C_real[:,0:300]))
-ax[0].imshow(C_real[:,0:300], interpolation="none", origin="upper", cmap="RdBu", aspect="auto", vmin=-vvmax, vmax=vvmax)
-ax[1].spy(C_real[:,0:300])
+ax[0].imshow(C_real.toarray()[:,0:300], interpolation="none", origin="upper", cmap="RdBu", aspect="auto", vmin=-vvmax, vmax=vvmax)
+ax[1].spy(C_real[:,0:300], marker=".", precision="present", aspect="auto")
 fig.savefig("C_real.png", dpi=300)
-
-fig, ax = plt.subplots(ncols=1, figsize=(12,3))
-vvmax = np.max(np.abs(C_imag[:,0:300]))
-ax.imshow(C_imag[:,0:300], interpolation="none", origin="upper", cmap="RdBu", aspect="auto", vmin=-vvmax, vmax=vvmax)
-fig.savefig("C_imag.png", dpi=300)
+#
+# fig, ax = plt.subplots(ncols=1, figsize=(12,3))
+# vvmax = np.max(np.abs(C_imag[:,0:300]))
+# ax.imshow(C_imag[:,0:300], interpolation="none", origin="upper", cmap="RdBu", aspect="auto", vmin=-vvmax, vmax=vvmax)
+# fig.savefig("C_imag.png", dpi=300)
 
 # interpolated points
-interp_real = np.dot(C_real, np.real(vis.flatten()))
-interp_imag = np.dot(C_imag, np.imag(vis.flatten()))
+interp_real = C_real.dot(np.real(vis.flatten()))
+interp_imag = C_imag.dot(np.imag(vis.flatten()))
 
 fig, ax = plt.subplots(nrows=4, figsize=(4,5))
 ax[0].plot(np.real(data_values), ".", ms=4)
