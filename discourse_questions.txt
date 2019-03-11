@@ -1,0 +1,18 @@
+Comes from a radio astronomy example. Basic idea is we are trying to infer the parameters of a model of some source on the sky ("the image plane"), which is described by a few parameters.
+
+Radio interferometers measure the Fourier transform of the image plane model at discrete u, v spatial frequencies, which are called visibilities.
+
+So, fitting a sky-plane model to a radio astronomical dataset requires evaluating the image-plane model, using the FFT to get a dense measurement of the visbility plane, and then interpolating this dense measurement to the exact u,v locations of all the datapoints in your dataset. I've implemented this interpolation operation as a sparse matrix multiply. In the field we use a convolutaional kernel, but it's not too dissimilar from other smooth interpolation schemes that use the nearest ~few points in each dimension.
+
+In this simple example we just have a two-dimensional Gaussian with amplitude, x-location, y-location, x-width, and y-width.
+
+
+Basically, to evaluate the visibility model properly, I need to define several constant grids that will be used in the calculation. First, there are the x,y pixels of the image plane model. Genreally, something like 128 x 128 pixels. Then, there are the interpolation matrices. Because we're interpolating from the dimensionality output grid to the same (u,v) points, these are fixed. It's the real and imaginary components of the output grid change as the model parameters change. 
+
+
+Importance of shared variables? Can generate gradients with them. Without, not so much.
+
+Does everything need to be a Theano variable, shared or otherwise?
+
+
+In the case that it does
