@@ -1,4 +1,10 @@
-*.jl.cov
-*.jl.*.cov
-*.jl.mem
-deps/deps.jl
+.DS_Store
+build
+__pycache__
+*.egg-info
+.pytest_cache
+dist
+.coverage*
+backups
+.ipynb_checkpoints
+*~
