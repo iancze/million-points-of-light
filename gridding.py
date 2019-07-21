@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.sparse import csc_matrix
+from scipy.sparse import lil_matrix, csc_matrix
 
 # implementation of the gridding convolution functions and image pre-multiply
 
@@ -158,9 +158,10 @@ def calc_matrices(data_points, u_model, v_model):
     vstride = len(u_model)
     Npix = len(v_model)
 
-    # initialize two sparse matrices. For now, just call them zeros.
-    C_real = np.zeros((N_vis, (Npix * vstride)), dtype=np.float64)
-    C_imag = np.zeros((N_vis, (Npix * vstride)), dtype=np.float64)
+    # initialize two sparse lil matrices for the instantiation
+    # convert to csc at the end
+    C_real = lil_matrix((N_vis, (Npix * vstride)), dtype=np.float64)
+    C_imag = lil_matrix((N_vis, (Npix * vstride)), dtype=np.float64)
 
     # determine model grid spacing
     du = np.abs(u_model[1] - u_model[0])
@@ -270,11 +271,7 @@ def calc_matrices(data_points, u_model, v_model):
         C_real[row_index, l_indices] = weights_real
         C_imag[row_index, l_indices] = weights_imag
 
-    C_real_sparse = csc_matrix(C_real)
-    C_imag_sparse = csc_matrix(C_imag)
-
-    # return C_real, C_imag
-    return C_real_sparse, C_imag_sparse
+    return C_real.tocsc(), C_imag.tocsc()
 
 
 # since we will probably have the case that len(data_points) > (len(u_model) * len(v_model)),
